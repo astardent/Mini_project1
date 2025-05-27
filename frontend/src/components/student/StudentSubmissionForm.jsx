@@ -1,17 +1,22 @@
-// components/student/StudentSubmissionForm.js
-import React, { useState, useContext } from 'react';
-import { AuthContext } from '../../context/AuthContext';
-import api from '../../utils/api'; // Your configured Axios instance
+// frontend/src/components/student/StudentSubmissionForm.jsx
+import React, { useState } from 'react'; // Removed useContext if token is handled by api interceptor
+import api from '../../utils/api';
 
-const StudentSubmissionForm = ({ assignmentDefId, courseId, onSubmissionSuccess }) => {
+const StudentSubmissionForm = ({ assignmentDefId, onSubmissionSuccess }) => {
     const [submissionText, setSubmissionText] = useState('');
     const [file, setFile] = useState(null);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { token } = useContext(AuthContext);
 
-    const handleFileChange = (e) => setFile(e.target.files[0]);
-
+    const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) { // Check if a file is selected
+        setFile(e.target.files[0]);
+        console.log("File selected:", e.target.files[0].name, e.target.files[0].type); // DEBUG
+    } else {
+        setFile(null); // No file selected or selection cleared
+        console.log("No file selected or selection cleared."); // DEBUG
+    }
+};
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!submissionText && !file) {
@@ -20,21 +25,27 @@ const StudentSubmissionForm = ({ assignmentDefId, courseId, onSubmissionSuccess 
         }
         setError('');
         setIsLoading(true);
-
+        console.log("File state before appending to FormData:", file);
         const formData = new FormData();
         formData.append('submissionText', submissionText);
         if (file) {
             formData.append('submissionFile', file); // Matches multer fieldname
-        }
-        // courseId is not strictly needed in formData if derivable from assignmentDefId on backend
-        // but can be useful for context or if your submit route isn't nested under assignmentDefId
+            console.log("Appended file to FormData:", file.name); // DEBUG
+        } else {
+        console.log("No file was in state to append to FormData."); // DEBUG
+    }
 
         try {
-            const response = await api.post(`/assignments/${assignmentDefId}/submit`, formData, {
-                // headers: { 'Content-Type': 'multipart/form-data' } // Axios sets this with FormData
-                // Authorization header is added by interceptor
-            });
+            // This API call now correctly targets the route for submitting to a specific definition
+            const response = await api.post(`/assignments/${assignmentDefId}/submit`, formData);
             onSubmissionSuccess(response.data);
+            // Optionally clear the form fields here
+            setSubmissionText('');
+            setFile(null);
+            // Clear file input:
+            const fileInput = e.target.querySelector('input[type="file"]');
+            if (fileInput) fileInput.value = "";
+
         } catch (err) {
             setError(err.response?.data?.error || err.message || 'Failed to submit.');
         }
@@ -42,18 +53,20 @@ const StudentSubmissionForm = ({ assignmentDefId, courseId, onSubmissionSuccess 
     };
 
     return (
-        <form onSubmit={handleSubmit} style={{ marginTop: '15px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
-            <h4>Submit Your Work</h4>
-            {error && <p style={{ color: 'red' }}>{error}</p>}
-            <div>
-                <label>Text Submission (Optional):</label>
-                <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} />
+        <form onSubmit={handleSubmit} style={{ marginTop: '10px' }}>
+            <h4>Your Submission</h4>
+            {error && <p className="error-message" style={{color: 'red'}}>{error}</p>}
+            <div className="form-group">
+                <label>Text (Optional):</label>
+                <textarea value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} disabled={isLoading} rows="5"/>
             </div>
-            <div>
-                <label>File Upload (Optional):</label>
-                <input type="file" onChange={handleFileChange} />
+            <div className="form-group">
+                <label>File (Optional):</label>
+                <input type="file" onChange={handleFileChange} disabled={isLoading}/>
             </div>
-            <button type="submit" disabled={isLoading}>{isLoading ? 'Submitting...' : 'Submit'}</button>
+            <button type="submit" disabled={isLoading} className="primary">
+                {isLoading ? 'Submitting...' : 'Submit Work'}
+            </button>
         </form>
     );
 };

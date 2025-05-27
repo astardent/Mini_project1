@@ -20,8 +20,8 @@ const SubmitAssignmentForm = () => {
         const fetchCourses = async () => {
             if (!token) return;
             try {
-                // You'll need an endpoint to get courses the student is enrolled in
-                const response = await fetch('/api/students/me/courses', { // Example endpoint
+                // fetches all the courses
+                const response = await fetch('/api/courses/', { // Example endpoint
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) throw new Error('Failed to fetch courses');
@@ -107,7 +107,7 @@ const SubmitAssignmentForm = () => {
                     <select id="course" value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)} required disabled={isSubmitting || courses.length === 0}>
                         <option value="" disabled>Select a course</option>
                         {courses.map(course => (
-                            <option key={course._id} value={course._id}>{course.title || course.name}</option>
+                            <option key={course._id} value={course._id}>{course.coursecode}</option>
                         ))}
                     </select>
                     {courses.length === 0 && <small>Loading courses or no courses enrolled.</small>}

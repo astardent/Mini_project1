@@ -3,45 +3,78 @@ import React, { createContext, useState, useEffect, useCallback } from 'react';
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
+  // Function to initialize state from localStorage
+  const getInitialAuthState = () => {
     const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
+    const storedUserString = localStorage.getItem('user');
     const storedRole = localStorage.getItem('role');
 
-    if (storedToken && storedUser && storedRole) {
+    if (storedToken && storedUserString && storedRole) {
       try {
-        // Optional: You could add a quick token validation check here with the backend
-        // or decode the token on the client to check expiry (though backend validation is king)
-        // For now, we trust what's in localStorage if it exists.
-        setUser(JSON.parse(storedUser));
-        setRole(storedRole);
-        setToken(storedToken);
+        const storedUser = JSON.parse(storedUserString);
+        return { token: storedToken, user: storedUser, role: storedRole };
       } catch (e) {
-        // If JSON.parse fails, clear bad data
-        console.error("Failed to parse stored user data:", e);
+        console.error("AuthProvider: Failed to parse stored user data on init.", e);
+        // Clear potentially corrupted data
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('role');
       }
     }
+    return { token: null, user: null, role: null };
+  };
+
+  const initialState = getInitialAuthState();
+  const [user, setUser] = useState(initialState.user);
+  const [role, setRole] = useState(initialState.role);
+  const [token, setToken] = useState(initialState.token);
+  const [loading, setLoading] = useState(true); // Still useful for initial async checks if you add them
+
+  // Effect for initial load (already good)
+  useEffect(() => {
+    // This effect primarily sets loading to false after initial state setup.
+    // The actual state is already initialized by getInitialAuthState.
     setLoading(false);
-  }, []); // Run only once on initial load
+  }, []);
+
+  // Effect to listen for storage changes from other tabs
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      console.log('Storage event received:', event.key);
+      if (event.storageArea === localStorage) { // Ensure it's localStorage changing
+        if (event.key === 'token' || event.key === 'user' || event.key === 'role') {
+          console.log(`AuthProvider: localStorage key '${event.key}' changed by another tab.`);
+          // Re-initialize auth state from localStorage to reflect changes
+          const updatedState = getInitialAuthState();
+          setToken(updatedState.token);
+          setUser(updatedState.user);
+          setRole(updatedState.role);
+
+          // If the token was removed (logged out in another tab), ensure all state is nullified
+          if (!updatedState.token && (token || user || role)) { // Check if current state was logged in
+            console.log("AuthProvider: Detected logout from another tab. Updating state.");
+            // The setStates above should handle this, but this is an explicit confirmation.
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [token, user, role]); // Add current auth state to deps to avoid stale closures if needed, though event handler is broad
 
   const login = useCallback(async (credentials, userRole) => {
     console.log("Attempting login with role:", userRole, "and credentials:", credentials);
     try {
-      const response = await fetch('/api/auth/login', { // Use the new backend login endpoint
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: credentials.email,
           password: credentials.password,
-          name: credentials.name, // Send name if your backend login logic uses it
+          name: credentials.name,
           role: userRole,
         }),
       });
@@ -51,70 +84,73 @@ export const AuthProvider = ({ children }) => {
         throw new Error(errorData.error || `Login failed for ${userRole}`);
       }
 
-      const data = await response.json(); // Expect { token, user: {id, name, email, role} }
+      const data = await response.json();
 
       if (!data.token || !data.user) {
         throw new Error('Login response did not include token or user information.');
       }
 
+      // These setItem calls will trigger the 'storage' event in other tabs
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('role', data.user.role); // Role now comes from backend via token/user object
+      localStorage.setItem('role', data.user.role);
 
       setToken(data.token);
       setUser(data.user);
       setRole(data.user.role);
 
-      return data.user; // Return the user object
+      return data.user;
     } catch (error) {
       console.error("Login error:", error);
-      // Clear any potentially partially set auth state on error
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('role');
       setToken(null);
       setUser(null);
       setRole(null);
-      throw error; // Re-throw for the LoginPage to catch
+      throw error;
     }
-  }, []);
+  }, []); // No dependencies needed for login as it sets state directly
 
-  const register = async (userData, userRole) => {
-    // Registration endpoint would be something like /api/students/addstudent or /api/instructors/addinstructor
-    // It should now hash the password on the backend.
-    // The frontend does not need to change much for register, assuming backend handles hashing.
+  const register = useCallback(async (userData, userRole) => {
     let endpoint = '';
     if (userRole === 'student') endpoint = '/api/students/addstudent';
     else if (userRole === 'instructor') endpoint = '/api/instructors/addinstructor';
     else throw new Error('Invalid role for registration');
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData), // Send plain password, backend will hash
-    });
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData),
+        });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Registration failed' }));
-      throw new Error(errorData.error || 'Registration failed');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Registration failed' }));
+            throw new Error(errorData.error || 'Registration failed');
+        }
+        const data = await response.json();
+        alert(`${userRole} registered successfully! Please log in.`);
+        return data;
+    } catch (error) {
+        console.error("Registration error:", error);
+        throw error; // Re-throw for the RegisterPage to catch
     }
-    const data = await response.json();
-    alert(`${userRole} registered successfully! Please log in.`); // User needs to login separately
-    return data;
-  };
+  }, []);
 
   const logout = useCallback(() => {
+    // These removeItem calls will trigger the 'storage' event in other tabs
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('role');
+
     setToken(null);
     setUser(null);
     setRole(null);
-    // Optional: Send a request to a backend /logout endpoint to invalidate token server-side if using a blacklist
   }, []);
 
   if (loading) {
-    return <div>Loading authentication...</div>; // Or a spinner component
+    return <div>Loading authentication...</div>;
   }
 
   return (

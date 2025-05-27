@@ -1,0 +1,8 @@
+node_modules/
+
+# Ignore compiled files
+*.class
+*.pyc
+
+# Ignore environment files
+backend/.env

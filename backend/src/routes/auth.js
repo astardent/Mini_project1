@@ -25,7 +25,7 @@ router.post('/login', async (req, res) => {
       user = await UserModel.findOne({ email,name });
     } else if (role === 'instructor') {
       UserModel = Instructor;
-      user = await UserModel.findOne({ email });
+      user = await UserModel.findOne({ email,name });
     } else {
       return res.status(400).json({ error: 'Invalid role specified.' });
     }
