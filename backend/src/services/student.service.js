@@ -1,7 +1,7 @@
 // Предположим, это student.service.js или аналогичный файл
 const Student = require('../models/student.model'); // Ensure path is correct
 const bcrypt = require('bcryptjs'); // You need bcryptjs
-
+const mongoose = require('mongoose');
 // --- Service Functions ---
 
 /**
@@ -115,4 +115,32 @@ exports.updateStudentDetails = async (email, updateData) => {
         { $set: updateData },
         { new: true }
     ).select('-password');
+};
+exports.updateStudentDetailsById = async (studentId, updateData) => {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        throw new Error("Invalid student ID format");
+    }
+    // Ensure password isn't updated directly if plain text is sent
+    if (updateData.password) {
+        console.warn("Admin attempt to set password directly in updateStudentDetailsById. This should be handled separately.");
+        delete updateData.password;
+    }
+    return await Student.findByIdAndUpdate(studentId, { $set: updateData }, { new: true }).select('-password');
+};
+
+exports.deleteStudentById = async (studentId) => {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        throw new Error("Invalid student ID format");
+    }
+    return await Student.deleteOne({ _id: studentId });
+};
+
+// Optional: Admin method to set/reset a student's password
+exports.adminSetStudentPassword = async (studentId, newPlainPassword) => {
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        throw new Error("Invalid student ID format");
+    }
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPlainPassword, salt);
+    return await Student.findByIdAndUpdate(studentId, { password: hashedPassword }, { new: true }).select('-password');
 };

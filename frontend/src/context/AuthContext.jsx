@@ -38,22 +38,41 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // Effect to listen for storage changes from other tabs
+  // AuthContext.jsx
+// ...
   useEffect(() => {
     const handleStorageChange = (event) => {
-      console.log('Storage event received:', event.key);
-      if (event.storageArea === localStorage) { // Ensure it's localStorage changing
+      if (event.storageArea === localStorage) {
         if (event.key === 'token' || event.key === 'user' || event.key === 'role') {
-          console.log(`AuthProvider: localStorage key '${event.key}' changed by another tab.`);
-          // Re-initialize auth state from localStorage to reflect changes
-          const updatedState = getInitialAuthState();
-          setToken(updatedState.token);
-          setUser(updatedState.user);
-          setRole(updatedState.role);
+          console.log(`AuthProvider: localStorage key '${event.key}' changed. Old value: ${event.oldValue}, New value: ${event.newValue}`);
 
-          // If the token was removed (logged out in another tab), ensure all state is nullified
-          if (!updatedState.token && (token || user || role)) { // Check if current state was logged in
-            console.log("AuthProvider: Detected logout from another tab. Updating state.");
-            // The setStates above should handle this, but this is an explicit confirmation.
+          const currentToken = localStorage.getItem('token');
+          const currentUserStr = localStorage.getItem('user');
+          const currentRole = localStorage.getItem('role');
+          let currentUser = null;
+          try {
+            if (currentUserStr) currentUser = JSON.parse(currentUserStr);
+          } catch (e) {
+            console.error("Error parsing user from storage event", e);
+            // Potentially clear corrupted storage here if needed
+            localStorage.removeItem('user');
+          }
+
+          // Only update state if the values actually changed from what's currently in React state
+          // This helps prevent loops if the event fires for a change we just made.
+          if (currentToken !== token) {
+            console.log("Updating token from storage event");
+            setToken(currentToken);
+          }
+          // Deep comparison for user object is tricky, could compare stringified versions or specific IDs
+          // For simplicity, if user string changes, update. A more robust check might be needed if user objects are complex.
+          if (currentUserStr !== JSON.stringify(user)) { // Compare stringified user
+             console.log("Updating user from storage event");
+             setUser(currentUser);
+          }
+          if (currentRole !== role) {
+            console.log("Updating role from storage event");
+            setRole(currentRole);
           }
         }
       }
@@ -63,7 +82,8 @@ export const AuthProvider = ({ children }) => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [token, user, role]); // Add current auth state to deps to avoid stale closures if needed, though event handler is broad
+  }, [token, user, role]); // Keep dependencies: if state changes, we want useEffect to re-run with new state in closure for comparisons
+// ... // Add current auth state to deps to avoid stale closures if needed, though event handler is broad
 
   const login = useCallback(async (credentials, userRole) => {
     console.log("Attempting login with role:", userRole, "and credentials:", credentials);

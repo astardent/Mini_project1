@@ -16,17 +16,31 @@ import AssignmentListStudent from './components/student/AssignmentListStudent';
 import MySubmissionsPage from './components/student/MySubmissionsPage';
 import ViewSubmissionsPage from './components/instructor/ViewSubmissionPage';
 import AssignmentSubmissionPage from './components/student/AssignmentSubmissionPage';
+import AdminDashboard from './components/admin/AdminDashboard';
+import ManageStudentsAdmin from './components/admin/ManageStudentsAdmin';
+import ManageCoursesAdmin from './components/admin/ManageCoursesAdmin';
+import ManageInstructorsAdmin from './components/admin/ManageInstructorsAdmin';
 
 function AppContent() {
   const { isLoggedIn, role } = React.useContext(AuthContext);
 
+  const getRedirectPath = () => {
+    if (role === 'admin') {
+      return "/admin/dashboard";
+    } else if (role === 'instructor') {
+      return "/instructor/dashboard";
+    } else if (role === 'student') {
+      return "/student/dashboard";
+    }
+    return "/"; // Default fallback if role is somehow unexpected
+  };
   return (
     <>
       <Navbar />
       <div className="container">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={!isLoggedIn ? <LoginPage /> : <Navigate to={role === 'student' ? "/student/dashboard" : "/instructor/dashboard"} />} />
+          <Route path="/login" element={!isLoggedIn ? <LoginPage /> : <Navigate to={getRedirectPath()} replace />} />
           <Route path="/register" element={!isLoggedIn ? <RegisterPage /> : <Navigate to="/" />} />
 
           {/* Student Routes */}
@@ -45,6 +59,11 @@ function AppContent() {
           <Route path="/instructor/assignments/:assignmentDefId/submissions" element={isLoggedIn && role === 'instructor' ? <ViewSubmissionsPage /> : <Navigate to="/login" />} />
           {/* Add more instructor routes */}
 
+          {/* adminroutes */}
+          <Route path="/admin/dashboard" element={isLoggedIn && role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" />} />
+          <Route path="/admin/manage-students" element={isLoggedIn && role === 'admin' ? <ManageStudentsAdmin /> : <Navigate to="/login" />} />
+          <Route path="/admin/manage-instructors" element={isLoggedIn && role === 'admin' ? <ManageInstructorsAdmin /> : <Navigate to="/login" />} />
+          <Route path="/admin/manage-courses" element={isLoggedIn && role === 'admin' ? <ManageCoursesAdmin /> : <Navigate to="/login" />} />
 
           <Route path="*" element={<Navigate to="/" />} /> {/* Fallback for unknown routes */}
         </Routes>

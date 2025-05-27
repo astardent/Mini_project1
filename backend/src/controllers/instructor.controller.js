@@ -84,3 +84,95 @@ exports.deleteInstructor = async (req, res) => {
         res.status(500).json({ error: "Failed to delete instructor" });
     }
 };
+exports.adminGetAllInstructors = async (req, res) => {
+    try {
+        const instructors = await InstructorService.getAllInstructor(); // Service already selects -password
+        res.json(instructors || []);
+    } catch (error) {
+        console.error("Error in adminGetAllInstructors:", error);
+        res.status(500).json({ error: 'Failed to retrieve instructors for admin.' });
+    }
+};
+
+// POST /api/admin/instructors (Admin adds instructor)
+exports.adminAddInstructor = async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: "Name, email, and password are required." });
+        }
+        // Service's addInstructor already handles hashing and email uniqueness check
+        const newInstructor = await InstructorService.addInstructor({ name, email, password });
+        res.status(201).json(newInstructor);
+    } catch (error) {
+        console.error("Error in adminAddInstructor:", error);
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({ error: error.message || 'Failed to add instructor.' });
+    }
+};
+
+// GET /api/admin/instructors/:instructorId
+exports.adminGetInstructorById = async (req, res) => {
+     try {
+        const instructor = await InstructorService.adminGetInstructorById(req.params.instructorId);
+        if (!instructor) return res.status(404).json({ error: 'Instructor not found.' });
+        res.json(instructor);
+    } catch (error) {
+        console.error("Error in adminGetInstructorById:", error);
+        res.status(500).json({ error: 'Failed to retrieve instructor.' });
+    }
+};
+
+// PUT /api/admin/instructors/:instructorId
+exports.adminUpdateInstructor = async (req, res) => {
+    try {
+        const { instructorId } = req.params;
+        const updateData = req.body;
+
+        // Handle password change separately if needed
+        if (updateData.password && updateData.password.trim() !== "") {
+            await InstructorService.adminSetInstructorPassword(instructorId, updateData.password);
+            delete updateData.password; // Don't pass it to details update
+        }
+
+
+        if (Object.keys(updateData).length === 0 && !(updateData.password && updateData.password.trim() !== "")) {
+             // If only password was sent and handled, or no data at all
+            const currentInstructor = await InstructorService.adminGetInstructorById(instructorId);
+            if (!currentInstructor) return res.status(404).json({ error: "Instructor not found." });
+            return res.json(currentInstructor); // Return current if no other details to update
+        }
+
+
+        if (Object.keys(updateData).length > 0) {
+            const updatedInstructor = await InstructorService.adminUpdateInstructorDetailsById(instructorId, updateData);
+            if (!updatedInstructor) { // This case might be hit if only password was in updateData and it's now empty
+                 const currentInstructorAfterPw = await InstructorService.adminGetInstructorById(instructorId);
+                 if (!currentInstructorAfterPw) return res.status(404).json({ error: "Instructor not found." });
+                 return res.json(currentInstructorAfterPw);
+            }
+            res.json(updatedInstructor);
+        }
+
+    } catch (error) {
+        console.error("Error in adminUpdateInstructor:", error);
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({ error: error.message || 'Failed to update instructor.' });
+    }
+};
+
+// DELETE /api/admin/instructors/:instructorId
+exports.adminDeleteInstructor = async (req, res) => {
+    try {
+        const { instructorId } = req.params;
+        const result = await InstructorService.adminDeleteInstructorById(instructorId);
+        if (result.deletedCount === 0) {
+            return res.status(404).json({ error: "Instructor not found." });
+        }
+        res.json({ message: "Instructor deleted successfully by admin." });
+    } catch (error) {
+        console.error("Error in adminDeleteInstructor:", error);
+        const statusCode = error.statusCode || 500;
+        res.status(statusCode).json({ error: error.message || 'Failed to delete instructor.' });
+    }
+};

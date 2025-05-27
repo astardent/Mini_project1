@@ -10,11 +10,11 @@ const assignmentDefinitionRoutes = require('./assignmentDefinition.routes'); // 
 const instructorRoutes = require('./instructor.routes');
 const authRoutes = require('./auth');
 const studentSubmissionRoutes = require('./studentSubmission.routes'); // For students submitting work
-
+const adminRoutes=require('./admin.routes')
 router.use('/users', userRoutes);
 router.use('/courses', courseRoutes);
 router.use('/students', studentRoutes); // General student info
-
+router.use('/admin',adminRoutes)
 // --- Clarifications & Recommendations for Assignment/Submission Routes ---
 
 // Option A: All assignment-related things under /assignments

@@ -1,6 +1,8 @@
 // services/instructor.service.js
 const Instructor = require('../models/instructor.model'); // Ensure path is correct
 const bcrypt = require('bcryptjs'); // Import bcryptjs
+const mongoose = require('mongoose');
+const AssignmentDefinition = require('../models/assignmentDefinition.model'); // For checking dependencies
 
 /**
  * Retrieves all instructors.
@@ -123,3 +125,75 @@ exports.findInstructorByEmailForAuth = async (email) => {
 // If you absolutely need the old `updateInstructor` behavior (updating password based on name/email match),
 // you'd need to adapt `updateInstructorPassword` to find by name and email,
 // but this is less robust than finding by a unique email.
+exports.adminGetInstructorById = async (instructorId) => {
+    if (!mongoose.Types.ObjectId.isValid(instructorId)) {
+        return null;
+    }
+    return await Instructor.findById(instructorId).select('-password');
+};
+
+/**
+ * Admin updates instructor's details (excluding password).
+ * For password, use adminSetInstructorPassword.
+ */
+exports.adminUpdateInstructorDetailsById = async (instructorId, updateData) => {
+    if (!mongoose.Types.ObjectId.isValid(instructorId)) {
+        const err = new Error("Invalid Instructor ID format");
+        err.statusCode = 400;
+        throw err;
+    }
+    if (updateData.password) {
+        delete updateData.password; // Prevent direct password update here
+    }
+    if (updateData.email) { // If email is updated, check for uniqueness
+        const existingInstructor = await Instructor.findOne({ email: updateData.email, _id: { $ne: instructorId } });
+        if (existingInstructor) {
+            const err = new Error(`Email '${updateData.email}' is already in use by another instructor.`);
+            err.statusCode = 409;
+            throw err;
+        }
+    }
+    return await Instructor.findByIdAndUpdate(instructorId, { $set: updateData }, { new: true }).select('-password');
+};
+
+/**
+ * Admin sets/resets an instructor's password.
+ */
+exports.adminSetInstructorPassword = async (instructorId, newPlainPassword) => {
+    if (!mongoose.Types.ObjectId.isValid(instructorId)) {
+        const err = new Error("Invalid Instructor ID format");
+        err.statusCode = 400;
+        throw err;
+    }
+    if (!newPlainPassword || newPlainPassword.length < 6) { // Example validation
+        const err = new Error("New password must be at least 6 characters long.");
+        err.statusCode = 400;
+        throw err;
+    }
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPlainPassword, salt);
+    return await Instructor.findByIdAndUpdate(instructorId, { password: hashedPassword }, { new: true }).select('-password');
+};
+
+/**
+ * Admin deletes an instructor by ID.
+ */
+exports.adminDeleteInstructorById = async (instructorId) => {
+    if (!mongoose.Types.ObjectId.isValid(instructorId)) {
+        const err = new Error("Invalid Instructor ID format");
+        err.statusCode = 400;
+        throw err;
+    }
+    // IMPORTANT: Check for dependencies, e.g., if instructor has created courses/assignments
+    const assignmentsExist = await AssignmentDefinition.findOne({ instructor: instructorId });
+    if (assignmentsExist) {
+        const err = new Error("Cannot delete instructor. They are associated with existing assignments. Please reassign or delete those first.");
+        err.statusCode = 400; // Or 409
+        throw err;
+    }
+    // Add checks for courses if instructor is directly linked to courses
+    // const coursesExist = await Course.findOne({ instructor: instructorId });
+    // if (coursesExist) { ... }
+
+    return await Instructor.deleteOne({ _id: instructorId });
+};

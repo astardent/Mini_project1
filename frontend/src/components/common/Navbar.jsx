@@ -39,6 +39,13 @@ const Navbar = () => {
                   </NavLink>
                 </li>
               )}
+              {role === 'admin' && (
+                <li className="nav-item">
+                  <NavLink to="/admin/dashboard" className="nav-link">
+                    Admin Dashboard
+                  </NavLink>
+                </li>
+              )}
               <li className="nav-item">
                 <span style={{padding: '8px 12px', color: '#ddd'}}>Welcome, {user?.name || user?.coursename || user?.email}</span>
               </li>
